@@ -158,7 +158,13 @@ class ObjectType extends Type
     public function getPropertyByName($name)
     {
         foreach ($this->properties as $property) {
-            if ($property->getName() === $name) {
+            $propertyName = $property->getName();
+
+            if ($propertyName === $name) {
+                return $property;
+            }
+
+            if ($this->isPatternProperty($propertyName) && \preg_match($propertyName, $name) === 1) {
                 return $property;
             }
         }
@@ -293,8 +299,29 @@ class ObjectType extends Type
             $value = \get_object_vars($value);
         }
         foreach ($this->getProperties() as $property) {
-            if ($property->getRequired() && !\array_key_exists($property->getName(), $value)) {
-                $this->errors[] = TypeValidationError::missingRequiredProperty($property->getName());
+            if (!$property->getRequired()) {
+                continue;
+            }
+
+            $propertyName = $property->getName();
+            if ($this->isPatternProperty($propertyName)) {
+                $propertyExist = false;
+                foreach ($value as $valuePropertyName => $valuePropertyValue) {
+                    if (\preg_match($propertyName, $valuePropertyName) === 1) {
+                        $propertyExist = true;
+
+                        break;
+                    }
+                }
+                if (!$propertyExist) {
+                    $this->errors[] = TypeValidationError::missingRequiredProperty($propertyName);
+                }
+
+                continue;
+            }
+
+            if (!\array_key_exists($propertyName, $value)) {
+                $this->errors[] = TypeValidationError::missingRequiredProperty($propertyName);
             }
         }
         foreach ($value as $name => $propertyValue) {
@@ -315,5 +342,10 @@ class ObjectType extends Type
                 $this->errors[] = $error;
             }
         }
+    }
+
+    private function isPatternProperty($name)
+    {
+        return \substr($name, 0, 1) === '/' && \substr($name, -1) === '/';
     }
 }
